@@ -5,13 +5,14 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <linux/i2c-dev.h>
+#include <i2c/smbus.h>
 #include <errno.h>
 #include <signal.h>
 #include <time.h>
 
 // I2C device address and bus
 #define I2C_DEVICE_ADDR 0x26
-#define MAX_I2C_BUS 10
+#define MAX_I2C_BUS 20
 
 // LED control registers
 #define LED_ON_REG_0    0xA0
@@ -92,9 +93,9 @@ int find_i2c_bus(void) {
         
         if (fd >= 0) {
             if (ioctl(fd, I2C_SLAVE, I2C_DEVICE_ADDR) >= 0) {
-                // Try to read from the device to verify it exists
-                char test_val = 0;
-                if (read(fd, &test_val, 1) >= 0 || errno == EAGAIN) {
+                // Try to read from the device using SMBus to verify it exists
+                __s32 result = i2c_smbus_read_byte(fd);
+                if (result >= 0 || errno == EAGAIN) {
                     close(fd);
                     printf("Found LED controller on I2C bus %d\n", bus);
                     return bus;
@@ -143,12 +144,12 @@ void cleanup_i2c(void) {
     }
 }
 
-// Write to I2C register
+// Write to I2C register using SMBus
 int write_i2c_register(int reg, int value) {
-    char buffer[2] = {reg, value};
+    __s32 result = i2c_smbus_write_byte_data(i2c_fd, reg, value);
     
-    if (write(i2c_fd, buffer, 2) != 2) {
-        perror("Failed to write to I2C device");
+    if (result < 0) {
+        perror("Failed to write to I2C device via SMBus");
         return -1;
     }
     
