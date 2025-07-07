@@ -21,6 +21,15 @@
 #define LED_ON_REG_1    0xA1
 #define LED_OFF_REG_1   0xB1
 
+// Blink control registers
+#define HDD0_BLINK_REG      0x52
+#define HDD1_BLINK_REG      0x54
+#define NETWORK_BLINK_REG   0x56
+#define NVME0_BLINK_REG     0x58
+#define NVME1_BLINK_REG     0x5A
+#define NVME2_BLINK_REG     0x5C
+#define NVME3_BLINK_REG     0x5E
+
 // LED bit masks
 #define HDD0_WHITE      0x04
 #define HDD0_RED        0x08
@@ -168,25 +177,29 @@ void set_led_state(int reg, int mask, int state) {
 
 // Turn off all LEDs
 void turn_off_all_leds(void) {
-  if (debug) printf("Turning off all LEDs...\n");
-    
-  // Turn off HDD LEDs
-  write_i2c_register(LED_OFF_REG_0, HDD0_WHITE);
-  write_i2c_register(LED_OFF_REG_0, HDD0_RED);
-  write_i2c_register(LED_OFF_REG_0, HDD1_WHITE);
-  write_i2c_register(LED_OFF_REG_0, HDD1_RED);
-  write_i2c_register(LED_OFF_REG_0, NETWORK_WHITE);
-  write_i2c_register(LED_OFF_REG_0, NETWORK_RED);
-    
-  // Turn off NVME LEDs
-  write_i2c_register(LED_OFF_REG_1, NVME0_WHITE);
-  write_i2c_register(LED_OFF_REG_1, NVME0_RED);
-  write_i2c_register(LED_OFF_REG_1, NVME1_WHITE);
-  write_i2c_register(LED_OFF_REG_1, NVME1_RED);
-  write_i2c_register(LED_OFF_REG_1, NVME2_WHITE);
-  write_i2c_register(LED_OFF_REG_1, NVME2_RED);
-  write_i2c_register(LED_OFF_REG_1, NVME3_WHITE);
-  write_i2c_register(LED_OFF_REG_1, NVME3_RED);
+  if (debug) printf("Turning off all LEDs and disabling blinking...\n");
+
+  // --- Turn off HDD and Network LEDs ---
+  write_i2c_register(LED_OFF_REG_0, HDD0_WHITE | HDD0_RED);
+  write_i2c_register(LED_OFF_REG_0, HDD1_WHITE | HDD1_RED);
+  write_i2c_register(LED_OFF_REG_0, NETWORK_WHITE | NETWORK_RED);
+
+  // --- Disable blinking for HDD and network ---
+  write_i2c_register(HDD0_BLINK_REG, 0x00);
+  write_i2c_register(HDD1_BLINK_REG, 0x00);
+  write_i2c_register(NETWORK_BLINK_REG, 0x00);
+
+  // --- Turn off NVMe LEDs ---
+  write_i2c_register(LED_OFF_REG_1, NVME0_WHITE | NVME0_RED);
+  write_i2c_register(LED_OFF_REG_1, NVME1_WHITE | NVME1_RED);
+  write_i2c_register(LED_OFF_REG_1, NVME2_WHITE | NVME2_RED);
+  write_i2c_register(LED_OFF_REG_1, NVME3_WHITE | NVME3_RED);
+
+  // --- Disable blinking for NVMe slots ---
+  write_i2c_register(NVME0_BLINK_REG, 0x00);
+  write_i2c_register(NVME1_BLINK_REG, 0x00);
+  write_i2c_register(NVME2_BLINK_REG, 0x00);
+  write_i2c_register(NVME3_BLINK_REG, 0x00);
 }
 
 // Read disk statistics from /proc/diskstats
