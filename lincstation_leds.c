@@ -85,10 +85,22 @@ int read_disk_stats(disk_stats_t *disks, int num_disks);
 int read_network_stats(network_stats_t *network);
 void signal_handler(int signal);
 void turn_off_all_leds(void);
+void disable_all_blinking(void);
 
 // Signal handler for graceful shutdown
 void signal_handler(int signal) {
-  if (debug) printf("\nReceived signal %d, shutting down...\n", signal);
+  if (debug) {
+    const char *signal_name = "UNKNOWN";
+    switch (signal) {
+      case SIGINT:  signal_name = "SIGINT"; break;
+      case SIGTERM: signal_name = "SIGTERM"; break;
+      case SIGQUIT: signal_name = "SIGQUIT"; break;
+      case SIGHUP:  signal_name = "SIGHUP"; break;
+      case SIGUSR1: signal_name = "SIGUSR1"; break;
+      case SIGUSR2: signal_name = "SIGUSR2"; break;
+    }
+    printf("\nReceived signal %s (%d), shutting down...\n", signal_name, signal);
+  }
   running = 0;
 }
 
@@ -156,13 +168,17 @@ void cleanup_i2c(void) {
 
 // Write to I2C register using SMBus
 int write_i2c_register(int reg, int value) {
+  if (debug) printf("I2C write: reg=0x%02X, value=0x%02X\n", reg, value);
+  
   __s32 result = i2c_smbus_write_byte_data(i2c_fd, reg, value);
     
   if (result < 0) {
+    if (debug) printf("I2C write failed: reg=0x%02X, value=0x%02X, error=%s\n", reg, value, strerror(errno));
     perror("Failed to write to I2C device via SMBus");
     return -1;
   }
     
+  if (debug) printf("I2C write successful: reg=0x%02X, value=0x%02X\n", reg, value);
   return 0;
 }
 
@@ -177,23 +193,28 @@ void set_led_state(int reg, int mask, int state) {
 
 // Turn off all LEDs
 void turn_off_all_leds(void) {
-  if (debug) printf("Turning off all LEDs and disabling blinking...\n");
+  if (debug) printf("Turning off all LEDs...\n");
 
   // --- Turn off HDD and Network LEDs ---
   write_i2c_register(LED_OFF_REG_0, HDD0_WHITE | HDD0_RED);
   write_i2c_register(LED_OFF_REG_0, HDD1_WHITE | HDD1_RED);
   write_i2c_register(LED_OFF_REG_0, NETWORK_WHITE | NETWORK_RED);
 
-  // --- Disable blinking for HDD and network ---
-  write_i2c_register(HDD0_BLINK_REG, 0x00);
-  write_i2c_register(HDD1_BLINK_REG, 0x00);
-  write_i2c_register(NETWORK_BLINK_REG, 0x00);
-
   // --- Turn off NVMe LEDs ---
   write_i2c_register(LED_OFF_REG_1, NVME0_WHITE | NVME0_RED);
   write_i2c_register(LED_OFF_REG_1, NVME1_WHITE | NVME1_RED);
   write_i2c_register(LED_OFF_REG_1, NVME2_WHITE | NVME2_RED);
   write_i2c_register(LED_OFF_REG_1, NVME3_WHITE | NVME3_RED);
+}
+
+// Disable blinking for all LEDs
+void disable_all_blinking(void) {
+  if (debug) printf("Disabling all LED blinking...\n");
+
+  // --- Disable blinking for HDD and network ---
+  write_i2c_register(HDD0_BLINK_REG, 0x00);
+  write_i2c_register(HDD1_BLINK_REG, 0x00);
+  write_i2c_register(NETWORK_BLINK_REG, 0x00);
 
   // --- Disable blinking for NVMe slots ---
   write_i2c_register(NVME0_BLINK_REG, 0x00);
@@ -408,6 +429,10 @@ int main(int argc, char *argv[]) {
   // Set up signal handlers
   signal(SIGINT, signal_handler);
   signal(SIGTERM, signal_handler);
+  signal(SIGQUIT, signal_handler);
+  signal(SIGHUP, signal_handler);
+  signal(SIGUSR1, signal_handler);
+  signal(SIGUSR2, signal_handler);
 
   if (debug) {
     printf("LED Disk & Network Activity Monitor\n");
@@ -422,6 +447,7 @@ int main(int argc, char *argv[]) {
     
   // Turn off all LEDs initially
   turn_off_all_leds();
+  disable_all_blinking();
     
   // Initialize disk stats (first read to establish baseline)
   read_disk_stats(disks, 6);
@@ -448,12 +474,29 @@ int main(int argc, char *argv[]) {
         
     if (debug) printf("---\n");
         
-    // Wait before next iteration
-    usleep(ACTIVITY_SAMPLE_INTERVAL);
+    // Wait before next iteration (use smaller intervals for better signal responsiveness)
+    for (int i = 0; i < 10 && running; i++) {
+      usleep(ACTIVITY_SAMPLE_INTERVAL / 10); // 100ms intervals
+    }
   }
     
   // Cleanup
-  turn_off_all_leds();
+  if (debug) printf("Starting cleanup...\n");
+  
+  // Turn off all LEDs with retry
+  int retry_count = 0;
+  while (retry_count < 3) {
+    if (debug) printf("Attempt %d: Turning off LEDs...\n", retry_count + 1);
+    turn_off_all_leds();
+    disable_all_blinking();
+    
+    // Small delay to ensure I2C commands complete
+    usleep(100000); // 100ms
+    
+    retry_count++;
+  }
+  
+  if (debug) printf("Cleanup completed.\n");
   cleanup_i2c();
     
   if (debug) printf("LED monitor stopped.\n");
