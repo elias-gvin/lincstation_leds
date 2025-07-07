@@ -23,7 +23,7 @@ PrivateTmp=true
 # ReadWritePaths=/dev/i2c-* /proc/diskstats /proc/net/dev # ReadWritePaths doesn't support glob (`*` pattern)
 
 # Environment variables
-Environment=LEDS_DEBUG=true
+Environment=LEDS_DEBUG=false
 
 [Install]
 WantedBy=multi-user.target 
