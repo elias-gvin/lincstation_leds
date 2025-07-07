@@ -1,0 +1,28 @@
+[Unit]
+Description=LincStation LED Disk & Network Activity Monitor
+After=multi-user.target
+Wants=multi-user.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/local/bin/lincstation_leds
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lincstation-leds
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/dev/i2c-* /proc/diskstats /proc/net/dev
+
+# Environment variables
+Environment=LEDS_DEBUG=false
+
+[Install]
+WantedBy=multi-user.target 
