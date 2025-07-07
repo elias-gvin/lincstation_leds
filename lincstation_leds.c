@@ -50,6 +50,10 @@
 #define HIGH_UTILIZATION_THRESHOLD  70.0
 #define ACTIVITY_SAMPLE_INTERVAL    1000000  // 1 second in microseconds
 
+// Cleanup retry settings
+#define CLEANUP_MAX_RETRIES         3
+#define CLEANUP_RETRY_DELAY         100000   // 100ms in microseconds
+
 typedef struct {
   char device_name[32];
   unsigned long long prev_read_sectors;
@@ -453,7 +457,20 @@ int main(int argc, char *argv[]) {
   }
     
   // Cleanup
-  turn_off_all_leds();
+  if (debug) printf("Starting cleanup...\n");
+  
+  // Turn off all LEDs with retry
+  int retry_count = 0;
+  while (retry_count < CLEANUP_MAX_RETRIES) {
+    if (debug) printf("Attempt %d/%d: Turning off LEDs...\n", retry_count + 1, CLEANUP_MAX_RETRIES);
+    // Turn off all LEDs (this function already handles blinking)
+    turn_off_all_leds();
+    // Small delay to ensure I2C commands complete
+    usleep(CLEANUP_RETRY_DELAY);
+    retry_count++;
+  }
+  if (debug) printf("Cleanup completed after %d attempts.\n", retry_count);
+  
   cleanup_i2c();
     
   if (debug) printf("LED monitor stopped.\n");
